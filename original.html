@@ -390,6 +390,11 @@ void main() {
             }
 
             onTouchStart(event) {
+                console.log('Touch Start:', {
+                    touches: event.touches.length,
+                    touch: event.touches[0],
+                    rect: this.canvas.getBoundingClientRect()
+                });
                 event.preventDefault();
                 event.stopPropagation();
                 this.isTouch = true;
@@ -398,6 +403,10 @@ void main() {
             }
 
             onTouchMove(event) {
+                console.log('Touch Move:', {
+                    active: this.touchActive,
+                    touches: event.touches.length
+                });
                 event.preventDefault();
                 event.stopPropagation();
                 if (this.touchActive && event.touches.length > 0) {
@@ -406,6 +415,7 @@ void main() {
             }
 
             onTouchEnd(event) {
+                console.log('Touch End');
                 event.preventDefault();
                 event.stopPropagation();
                 this.touchActive = false;
@@ -415,18 +425,28 @@ void main() {
             handleTouch(touch) {
                 const rect = this.canvas.getBoundingClientRect();
                 
-                // Use pageX/pageY instead of clientX/clientY for better mobile support
                 const x = (touch.pageX - rect.left) / rect.width;
                 const y = 1 - ((touch.pageY - rect.top) / rect.height);
 
                 const clampedX = Math.max(0, Math.min(1, x));
                 const clampedY = Math.max(0, Math.min(1, y));
 
+                console.log('Handle Touch:', {
+                    raw: { x: touch.pageX, y: touch.pageY },
+                    rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+                    normalized: { x, y },
+                    clamped: { x: clampedX, y: clampedY }
+                });
+
                 this.simulationMaterial.uniforms.uMouse.value.x = clampedX;
                 this.simulationMaterial.uniforms.uMouse.value.y = clampedY;
                 this.simulationMaterial.uniforms.uIsMouseDown.value = true;
 
-                // Increase timeout for better mobile responsiveness
+                console.log('Uniforms:', {
+                    mouse: { ...this.simulationMaterial.uniforms.uMouse.value },
+                    isMouseDown: this.simulationMaterial.uniforms.uIsMouseDown.value
+                });
+
                 if (this.mouseTimeout) {
                     clearTimeout(this.mouseTimeout);
                 }
@@ -434,8 +454,9 @@ void main() {
                 this.mouseTimeout = setTimeout(() => {
                     if (!this.touchActive) {
                         this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+                        console.log('Mouse timeout triggered, isMouseDown set to false');
                     }
-                }, 50); // Increased from 20ms to 50ms
+                }, 50);
             }
 
             onMouseMove(event) {
