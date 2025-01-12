@@ -489,6 +489,7 @@ void main() {
             }
 
             animate() {
+                console.log('Animation frame:', performance.now());
                 requestAnimationFrame(this.animate.bind(this));
                 
                 const time = performance.now() * 0.001;
