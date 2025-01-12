@@ -271,6 +271,9 @@ void main() {
                 this.lastMouseX = 0;
                 this.lastMouseY = 0;
                 this.mouseTimeout = null;
+                this.isTouch = false;
+                this.lastTouchX = 0;
+                this.lastTouchY = 0;
             }
 
             initRenderer() {
@@ -364,28 +367,63 @@ void main() {
             addEventListeners() {
                 window.addEventListener('resize', this.onResize.bind(this));
                 window.addEventListener('mousemove', this.onMouseMove.bind(this));
+                
+                window.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+                window.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+                window.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
             }
 
             onResize() {
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
             }
 
+            onTouchStart(event) {
+                event.preventDefault();
+                this.isTouch = true;
+                this.handleTouch(event.touches[0]);
+            }
+
+            onTouchMove(event) {
+                event.preventDefault();
+                this.handleTouch(event.touches[0]);
+            }
+
+            onTouchEnd(event) {
+                event.preventDefault();
+                this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+            }
+
+            handleTouch(touch) {
+                const x = touch.clientX / window.innerWidth;
+                const y = 1 - (touch.clientY / window.innerHeight);
+
+                this.simulationMaterial.uniforms.uMouse.value.x = x;
+                this.simulationMaterial.uniforms.uMouse.value.y = y;
+                this.simulationMaterial.uniforms.uIsMouseDown.value = true;
+
+                if (this.mouseTimeout) {
+                    clearTimeout(this.mouseTimeout);
+                }
+
+                this.mouseTimeout = setTimeout(() => {
+                    this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+                }, 20);
+            }
+
             onMouseMove(event) {
-                this.simulationMaterial.uniforms.uMouse.value.x = event.clientX / window.innerWidth;
-                this.simulationMaterial.uniforms.uMouse.value.y = 1 - (event.clientY / window.innerHeight);
+                if (!this.isTouch) {
+                    this.simulationMaterial.uniforms.uMouse.value.x = event.clientX / window.innerWidth;
+                    this.simulationMaterial.uniforms.uMouse.value.y = 1 - (event.clientY / window.innerHeight);
+                    this.simulationMaterial.uniforms.uIsMouseDown.value = true;
 
-                 // Set mouse as active
-                 this.simulationMaterial.uniforms.uIsMouseDown.value = true;
+                    if (this.mouseTimeout) {
+                        clearTimeout(this.mouseTimeout);
+                    }
 
-// Clear any existing timeout
-if (this.mouseTimeout) {
-    clearTimeout(this.mouseTimeout);
-}
-
-// Set new timeout
-this.mouseTimeout = setTimeout(() => {
-    this.simulationMaterial.uniforms.uIsMouseDown.value = false;
-}, 20);
+                    this.mouseTimeout = setTimeout(() => {
+                        this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+                    }, 20);
+                }
             }
 
             animate() {
