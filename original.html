@@ -102,9 +102,18 @@
             vec4 prevState = texture2D(uPreviousState, vUv);
             vec4 neighborhood = getNeighborhood(vUv);
             
+            // Add this test pattern
+            float testPattern = sin(vUv.x * 10.0 + uTime) * sin(vUv.y * 10.0 + uTime) * 0.5 + 0.5;
+            
             float currentMass = prevState.r;
             float currentVelocity = prevState.g;
             float currentHeight = prevState.b;
+            
+            // Force some activity regardless of touch
+            if(testPattern > 0.8) {
+                currentMass = 1.0;
+                currentHeight = 1.0;
+            }
             
             // Continuous version of Conway's rules
             float birthRate = 0.91;  // How quickly cells come alive
