@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="index.css">
+    <title>Document</title>
+</head>
+<body>
+    <script type="importmap">
+        {
+              "imports": {
+                "three": "https://unpkg.com/three@0.158/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158/examples/jsm/",
+                "postprocessing": "https://cdn.jsdelivr.net/npm/postprocessing@6.33.3/+esm"
+              }
+            }
+          </script>
+
+
+          <script id="vertexShader" type="x-shader/x-vertex">
+            varying vec2 vUv;
+          
+          void main() {
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              vUv = uv;
+          }
+              </script>
+
+              <!-- render shader -->
+          <script id="fragmentShaderScreen" type="x-shader/x-fragment">
+            precision highp float;
+            varying vec2 vUv;
+            uniform sampler2D uState;
+            uniform float uTime;
+            
+            // Return to original PBR parameters
+            const float roughness = 0.2;
+            const float metalness = 0.0;
+            const vec3 baseColor = vec3(0.8,0.00, 0.0);
+            
+            vec3 calculateNormal(vec2 uv) {
+                vec2 texel = vec2(1.0) / vec2(textureSize(uState, 0));
+                float left = texture2D(uState, uv - vec2(texel.x, 0.0)).b;
+                float right = texture2D(uState, uv + vec2(texel.x, 0.0)).b;
+                float top = texture2D(uState, uv - vec2(0.0, texel.y)).b;
+                float bottom = texture2D(uState, uv + vec2(0.0, texel.y)).b;
+                
+                vec3 normal = normalize(vec3(
+                    (right - left) * 2.0,
+                    (bottom - top) * 2.0,
+                    1.0
+                ));
+                
+                // Smooth normals based on height
+                float height = texture2D(uState, uv).b;
+                return mix(vec3(0.0, 0.0, 1.0), normal, smoothstep(0.1, 0.8, height));
+            }
+            
+            float ggxDistribution(float NdotH, float roughness) {
+                float alpha = roughness * roughness;
+                float alpha2 = alpha * alpha;
+                float NdotH2 = NdotH * NdotH;
+                float denom = NdotH2 * (alpha2 - 1.0) + 1.0;
+                return alpha2 / (3.14159 * denom * denom);
+            }
+            
+            float geometrySchlickGGX(float NdotV, float roughness) {
+                float r = roughness + 1.0;
+                float k = (r * r) / 8.0;
+                return NdotV / (NdotV * (1.0 - k) + k);
+            }
+            
+            vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+                return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+            }
+            
+            void main() {
+                vec4 state = texture2D(uState, vUv);
+                float mass = state.r;
+                float height = state.b;
+                
+                vec3 normal = calculateNormal(vUv);
+                vec3 lightPos = vec3(2.0 * cos(uTime * 0.5), 2.0 * sin(uTime * 0.5), 2.0);
+                vec3 viewPos = vec3(0.0, 0.0, 2.0);
+                vec3 worldPos = vec3(vUv * 2.0 - 1.0, height);
+                
+                vec3 N = normal;
+                vec3 V = normalize(viewPos - worldPos);
+                vec3 L = normalize(lightPos - worldPos);
+                vec3 H = normalize(V + L);
+                
+                float NdotV = max(dot(N, V), 0.0);
+                float NdotL = max(dot(N, L), 0.0);
+                float NdotH = max(dot(N, H), 0.0);
+                float HdotV = max(dot(H, V), 0.0);
+                
+                vec3 F0 = mix(vec3(0.04), baseColor, metalness);
+                vec3 F = fresnelSchlick(HdotV, F0);
+                float D = ggxDistribution(NdotH, roughness);
+                float G = geometrySchlickGGX(NdotV, roughness) * geometrySchlickGGX(NdotL, roughness);
+                
+                // Apply height-based specular dampening while keeping original material properties
+                vec3 specular = (D * F * G) / (4.0 * NdotV * NdotL + 0.001);
+                specular *= smoothstep(0.0, 0.3, height); // This line controls spotlight visibility
+                
+                vec3 kD = (vec3(1.0) - F) * (1.0 - metalness);
+                vec3 diffuse = kD * baseColor / 3.14159;
+                
+                vec3 color = (diffuse + specular) * NdotL;
+                
+                // Original emission and ambient values
+                color += baseColor * mass * 0.399;
+            
+                color += baseColor * 0.29;
+                
+                // Original tone mapping and gamma correction
+                color = color / (color + vec3(1.0));
+                color = pow(color, vec3(1.0/2.5));
+                
+                gl_FragColor = vec4(color, 1.0);
+            }
+              </script>
+          
+
+              <!-- simulation shader -->
+          <script id="fragmentShaderBuffer" type="x-shader/x-fragment">
+          
+            precision highp float;
+            varying vec2 vUv;
+            uniform sampler2D uPreviousState;
+            uniform vec2 uResolution;
+            uniform vec2 uMouse;
+            uniform bool uIsMouseDown;
+            uniform float uTime;
+    
+            // Continuous neighborhood counting
+            vec4 getNeighborhood(vec2 uv) {
+                vec2 texel = 1.0 / uResolution;
+                float alive = 0.0;
+                float total = 0.0;
+                
+                // Sample in a radius around the current position
+                float radius = 3.0;
+                float count = 0.0;
+                
+                for(float y = -radius; y <= radius; y++) {
+                    for(float x = -radius; x <= radius; x++) {
+                        vec2 offset = vec2(x, y) * texel;
+                        float dist = length(offset * uResolution / radius);
+                        
+                        // Only count cells within a circle
+                        if(dist <= radius) {
+                            // Gaussian weight based on distance
+                            float weight = exp(-dist * dist / 4.0);
+                            
+                            vec4 state = texture2D(uPreviousState, uv + offset);
+                            alive += state.r * weight;
+                            total += weight;
+                            count += 1.0;
+                        }
+                    }
+                }
+                
+                // Normalize the count to 0-1 range
+                alive = alive / total;
+                
+                // Calculate how close we are to having "3 neighbors"
+                // Map the continuous value to peak at 3/8 (equivalent to 3 neighbors in discrete version)
+                float neighborFactor = 1.0 - abs(alive - 0.375) * 4.0;
+                
+                return vec4(alive, neighborFactor, count, total);
+            }
+    
+            float hash(vec2 p) {
+                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+            }
+    
+            void main() {
+                vec4 prevState = texture2D(uPreviousState, vUv);
+                vec4 neighborhood = getNeighborhood(vUv);
+                
+                float currentMass = prevState.r;
+                float currentVelocity = prevState.g;
+                float currentHeight = prevState.b;
+                
+                // Continuous version of Conway's rules
+                float birthRate = 0.91;  // How quickly cells come alive
+                float deathRate = 0.91;  // How quickly cells die
+                float sustainRate = 0.9; // How well cells maintain their state
+                
+                // Calculate state change based on neighborhood
+                float neighborFactor = neighborhood.y;
+                float targetMass = 0.0;
+                
+                // Birth rule (continuous version of "exactly 3 neighbors")
+                if(neighborFactor > 0.99) {
+                    targetMass = 2.0;
+                }
+                // Death rule (continuous version of underpopulation/overpopulation)
+                else if(neighborFactor < 0.6) {
+                    targetMass = 0.0;
+                }
+                // Sustain current state with slight decay
+                else {
+                    targetMass = currentMass * sustainRate;
+                }
+                
+                // Add some noise and movement
+                float noise = hash(vUv + vec2(uTime * 0.01));
+                float noiseFactor = 0.;
+                
+                // Calculate new state
+                float newMass = mix(currentMass, targetMass, 0.15) + (noise - 0.5) * noiseFactor;
+                float newVelocity = currentVelocity * 0.95;
+                float newHeight = currentHeight * 0.98 + newMass * 0.1;
+                
+                // Mouse interaction
+                vec2 mouseDist = vUv - uMouse;
+                if( uIsMouseDown && length(mouseDist) < 0.03) {
+                    newMass = 0.50;
+                    newHeight += 0.3;
+                    newVelocity += length(mouseDist) * 2.0;
+                }
+                
+                // Ensure values stay in valid range
+                newMass = clamp(newMass, 0.0, 1.0);
+                newHeight = clamp(newHeight, 0.0, 1.0);
+                
+                gl_FragColor = vec4(newMass, newVelocity, newHeight, 1.0);
+            }
+              </script>
+    <script type="module" src="index.js"></script>
+</body>
+</html>
