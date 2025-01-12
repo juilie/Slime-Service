@@ -263,6 +263,7 @@ void main() {
 
         class SlimeSimulation {
             constructor() {
+                this.canvas = document.getElementById('canvas');
                 this.initRenderer();
                 this.initScene();
                 this.initSimulation();
@@ -272,8 +273,10 @@ void main() {
                 this.lastMouseY = 0;
                 this.mouseTimeout = null;
                 this.isTouch = false;
-                this.lastTouchX = 0;
-                this.lastTouchY = 0;
+
+                // Add touch-specific properties
+                this.touchActive = false;
+               
             }
 
             initRenderer() {
@@ -368,9 +371,15 @@ void main() {
                 window.addEventListener('resize', this.onResize.bind(this));
                 window.addEventListener('mousemove', this.onMouseMove.bind(this));
                 
-                window.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
-                window.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
-                window.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
+                // Add touch events to the canvas specifically
+                this.canvas.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+                this.canvas.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+                this.canvas.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
+                this.canvas.addEventListener('touchcancel', this.onTouchEnd.bind(this), { passive: false });
+
+                // Prevent default touch actions on the canvas
+                this.canvas.style.touchAction = 'none';
+                document.body.style.overscrollBehavior = 'none';
             }
 
             onResize() {
@@ -380,25 +389,37 @@ void main() {
             onTouchStart(event) {
                 event.preventDefault();
                 this.isTouch = true;
+                this.touchActive = true;
                 this.handleTouch(event.touches[0]);
             }
 
             onTouchMove(event) {
                 event.preventDefault();
-                this.handleTouch(event.touches[0]);
+                if (this.touchActive && event.touches.length > 0) {
+                    this.handleTouch(event.touches[0]);
+                }
             }
 
             onTouchEnd(event) {
                 event.preventDefault();
+                this.touchActive = false;
                 this.simulationMaterial.uniforms.uIsMouseDown.value = false;
             }
 
             handleTouch(touch) {
-                const x = touch.clientX / window.innerWidth;
-                const y = 1 - (touch.clientY / window.innerHeight);
+                // Get canvas bounds for accurate position calculation
+                const rect = this.canvas.getBoundingClientRect();
+                
+                // Calculate position relative to canvas
+                const x = (touch.clientX - rect.left) / rect.width;
+                const y = 1 - ((touch.clientY - rect.top) / rect.height);
 
-                this.simulationMaterial.uniforms.uMouse.value.x = x;
-                this.simulationMaterial.uniforms.uMouse.value.y = y;
+                // Ensure coordinates are within bounds
+                const clampedX = Math.max(0, Math.min(1, x));
+                const clampedY = Math.max(0, Math.min(1, y));
+
+                this.simulationMaterial.uniforms.uMouse.value.x = clampedX;
+                this.simulationMaterial.uniforms.uMouse.value.y = clampedY;
                 this.simulationMaterial.uniforms.uIsMouseDown.value = true;
 
                 if (this.mouseTimeout) {
@@ -406,14 +427,20 @@ void main() {
                 }
 
                 this.mouseTimeout = setTimeout(() => {
-                    this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+                    if (!this.touchActive) {
+                        this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+                    }
                 }, 20);
             }
 
             onMouseMove(event) {
                 if (!this.isTouch) {
-                    this.simulationMaterial.uniforms.uMouse.value.x = event.clientX / window.innerWidth;
-                    this.simulationMaterial.uniforms.uMouse.value.y = 1 - (event.clientY / window.innerHeight);
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = (event.clientX - rect.left) / rect.width;
+                    const y = 1 - ((event.clientY - rect.top) / rect.height);
+
+                    this.simulationMaterial.uniforms.uMouse.value.x = Math.max(0, Math.min(1, x));
+                    this.simulationMaterial.uniforms.uMouse.value.y = Math.max(0, Math.min(1, y));
                     this.simulationMaterial.uniforms.uIsMouseDown.value = true;
 
                     if (this.mouseTimeout) {
