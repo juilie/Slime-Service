@@ -273,6 +273,25 @@ void main() {
         class SlimeSimulation {
             constructor() {
                 this.canvas = document.getElementById('canvas');
+                
+                // Check WebGL capabilities
+                const gl = this.canvas.getContext('webgl');
+                if (!gl) {
+                    console.error('WebGL not supported');
+                    return;
+                }
+                
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    console.log('GPU:', gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
+                }
+                
+                // Check if floating point textures are available
+                const float_ext = gl.getExtension('OES_texture_float');
+                const half_float_ext = gl.getExtension('OES_texture_half_float');
+                console.log('Float texture support:', !!float_ext);
+                console.log('Half float texture support:', !!half_float_ext);
+
                 this.initRenderer();
                 this.initScene();
                 this.initSimulation();
@@ -291,10 +310,14 @@ void main() {
             initRenderer() {
                 this.renderer = new THREE.WebGLRenderer({
                     canvas: document.getElementById('canvas'),
-                    antialias: true
+                    antialias: true,
+                    powerPreference: "high-performance",
+                    alpha: true,
+                    premultipliedAlpha: false,
+                    preserveDrawingBuffer: true
                 });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
-                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for mobile
             }
 
             initScene() {
@@ -305,29 +328,32 @@ void main() {
 
             initSimulation() {
                 const aspectRatio = window.innerWidth / window.innerHeight;
-                const baseResolution = 512; // Base resolution for height
-                const stretchFactor = 1; // Adjust this to control amount of stretch
+                const baseResolution = 256; // Reduced from 512 for mobile
+                const stretchFactor = 1;
                 
-                // Always make width wider by stretchFactor
                 const sizes = {
                     width: Math.round(baseResolution * aspectRatio * stretchFactor),
                     height: baseResolution
                 };
                 this.sizes = sizes;
 
-                // Create render targets for ping-pong
+                // Create render targets with explicit mobile-friendly parameters
                 this.renderTargets = [
                     new THREE.WebGLRenderTarget(sizes.width, sizes.height, {
-                        minFilter: THREE.LinearFilter,
-                        magFilter: THREE.LinearFilter,
+                        minFilter: THREE.NearestFilter,
+                        magFilter: THREE.NearestFilter,
                         format: THREE.RGBAFormat,
-                        type: THREE.FloatType
+                        type: THREE.HalfFloatType, // Changed from FloatType for better mobile support
+                        stencilBuffer: false,
+                        depthBuffer: false
                     }),
                     new THREE.WebGLRenderTarget(sizes.width, sizes.height, {
-                        minFilter: THREE.LinearFilter,
-                        magFilter: THREE.LinearFilter,
+                        minFilter: THREE.NearestFilter,
+                        magFilter: THREE.NearestFilter,
                         format: THREE.RGBAFormat,
-                        type: THREE.FloatType
+                        type: THREE.HalfFloatType,
+                        stencilBuffer: false,
+                        depthBuffer: false
                     })
                 ];
 
