@@ -141,7 +141,7 @@
             vec2 mouseDist = vUv - uMouse;
             // Adjust for aspect ratio
             mouseDist.x *= uResolution.x / uResolution.y;
-            float mouseRadius = 0.1;
+            float mouseRadius = 0.03;
             if(uIsMouseDown && length(mouseDist) < mouseRadius) {
                 // Create a more organic, lumpy pattern
                 float distFactor = 1.0 - length(mouseDist) / mouseRadius;
@@ -151,10 +151,10 @@
                 float variation = sin(angle * 8.0 + uTime * 2.0) * 0.3 + 
                                  sin(angle * 4.0 - uTime * 3.0) * 0.2;
                 
-                // Increase the effect strength
-                newMass = 1.0 + variation * distFactor * 0.5;
-                newHeight += (0.5 + variation * 0.3) * distFactor;
-                newVelocity += length(mouseDist) * (2.0 + variation) * 3.0;
+                // Modulate the mass and height based on the variation
+                newMass = 0.5 + variation * distFactor * 0.3;
+                newHeight += (0.3 + variation * 0.2) * distFactor;
+                newVelocity += length(mouseDist) * (1.0 + variation) * 2.0;
             }
             
             // Ensure values stay in valid range
@@ -297,7 +297,7 @@ void main() {
             initSimulation() {
                 const aspectRatio = window.innerWidth / window.innerHeight;
                 const baseResolution = 512; // Base resolution for height
-                const stretchFactor = .8; // Adjust this to control amount of stretch
+                const stretchFactor = 1; // Adjust this to control amount of stretch
                 
                 // Always make width wider by stretchFactor
                 const sizes = {
@@ -305,7 +305,6 @@ void main() {
                     height: baseResolution
                 };
                 this.sizes = sizes;
-                console.log(this.sizes);
 
                 // Create render targets for ping-pong
                 this.renderTargets = [
