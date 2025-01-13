@@ -329,7 +329,12 @@
 
         class SlimeSimulation {
             constructor() {
-                 this.canvas = document.getElementById('canvas');
+                this.canvas = document.getElementById('canvas');
+                this.baseResolution = 128; // Default resolution for desktop
+                if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                    this.baseResolution = 128; // Lower resolution for mobile
+                }
+
                 this.initRenderer();
                 this.initScene();
                 this.initSimulation();
@@ -366,7 +371,7 @@
 
                 try {
                     // Load your image - replace URL with your actual image path
-                    this.imageTexture = await loadTexture('/maple.png');
+                    this.imageTexture = await loadTexture('./maple.png');
                     this.imageTexture.wrapS = THREE.RepeatWrapping;
                     this.imageTexture.wrapT = THREE.RepeatWrapping;
                 } catch (error) {
@@ -453,13 +458,13 @@
                     uniforms: {
                         uState: { value: null },
                         uTime: { value: 0 },
-                        uBaseColor: { value: new THREE.Vector3(0.0, 1.0, 0.0) },
+                        uBaseColor: { value: new THREE.Vector3(0.0, 0.0, 0.0) },
                         uSecondaryColor: { value: new THREE.Vector4(0.0, 0.01, 0.02, 1.0) },
                         uRoughness: { value: 0.15 },
                         uMetalness: { value: 0.9 },
                         uImageTexture: { value: this.imageTexture },
                         uShowImage: { value: true },
-                        uGlassEffect: { value: true },
+                        uGlassEffect: { value: false },
                         uToneMappingDenominator: { value: 2.2 },
                         uSmoothNormals: { value: false },
                         uLightPosZ: { value: 1.5 },
@@ -600,12 +605,79 @@
                 [this.renderTargets[0], this.renderTargets[1]] = [this.renderTargets[1], this.renderTargets[0]];
             }
 
+            resizeSimulation(newBaseResolution) {
+                const aspectRatio = window.innerWidth / window.innerHeight;
+                const stretchFactor = 1.0;
+                
+                // Calculate new sizes
+                const newSizes = {
+                    width: Math.round(newBaseResolution * aspectRatio * stretchFactor),
+                    height: newBaseResolution
+                };
+
+                // Create new render targets at the new resolution
+                const newRenderTargets = [
+                    new THREE.WebGLRenderTarget(newSizes.width, newSizes.height, {
+                        minFilter: THREE.LinearFilter,
+                        magFilter: THREE.LinearFilter,
+                        format: THREE.RGBAFormat,
+                        type: THREE.HalfFloatType
+                    }),
+                    new THREE.WebGLRenderTarget(newSizes.width, newSizes.height, {
+                        minFilter: THREE.LinearFilter,
+                        magFilter: THREE.LinearFilter,
+                        format: THREE.RGBAFormat,
+                        type: THREE.HalfFloatType
+                    })
+                ];
+
+                // Create a temporary scene and camera for scaling
+                const tempScene = new THREE.Scene();
+                const tempCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+                // Create a mesh with the current state texture
+                const tempMaterial = new THREE.MeshBasicMaterial({
+                    map: this.renderTargets[0].texture,
+                    // Use appropriate filtering for upscaling/downscaling
+                    magFilter: THREE.LinearFilter,
+                    minFilter: THREE.LinearFilter
+                });
+                const tempMesh = new THREE.Mesh(this.quad, tempMaterial);
+                tempScene.add(tempMesh);
+
+                // Render the current state to the new render target
+                this.renderer.setRenderTarget(newRenderTargets[0]);
+                this.renderer.render(tempScene, tempCamera);
+                this.renderer.setRenderTarget(null);
+
+                // Clean up old render targets
+                this.renderTargets.forEach(target => target.dispose());
+                
+                // Update class properties
+                this.renderTargets = newRenderTargets;
+                this.sizes = newSizes;
+                this.baseResolution = newBaseResolution;
+
+                // Update uniforms
+                this.simulationMaterial.uniforms.uResolution.value.set(newSizes.width, newSizes.height);
+            }
+
             initGUI() {
                 const gui = new GUI();
                 
+                const simParams = {
+                    resolution: this.baseResolution
+                };
+
+                gui.add(simParams, 'resolution', 64, 1024, 1)
+                    .name('Resolution')
+                    .onChange(value => {
+                        this.resizeSimulation(value);
+                    });
+
                 // Create an object to hold our boolean values
                 const params = {
-                    glassEffect: true,  // Initial value
+                    glassEffect: false,  // Initial value
                     smoothNormals: false,
                     spotlightDampening: true,
                     showImage: true
