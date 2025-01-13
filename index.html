@@ -3,233 +3,829 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="index.css">
-    <title>Document</title>
+    <title>3D Continuous Slime-like Inkspot</title>
+    <style>
+        canvas {
+            position: absolute;
+            top: 0;
+            z-index: -1;
+            cursor: none;
+        }
+
+        main {
+            backdrop-filter: blur(2px);
+            margin: 10px;
+            width: fit-content;
+            color: white;
+            background-color: rgba(240, 248, 255, 0.033);
+        }
+
+        main{
+            display: none;
+        }
+
+        .lil-gui {
+            --background-color: rgba(0, 0, 0, 0.8);
+            --text-color: rgb(235, 235, 235);
+            --title-background-color: rgba(0, 0, 0, 0.9);
+            --title-text-color: rgb(255, 255, 255);
+            --widget-color: rgb(23, 23, 23);
+            --hover-color: rgb(38, 38, 38);
+            --focus-color: rgb(68, 68, 68);
+            --number-color: rgb(125, 185, 255);
+            --string-color: rgb(149, 225, 147);
+        }
+    </style>
 </head>
-<body>
+<body style="margin:0">
+    <canvas id="canvas"></canvas>
     <script type="importmap">
-        {
-              "imports": {
-                "three": "https://unpkg.com/three@0.158/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.158/examples/jsm/",
-                "postprocessing": "https://cdn.jsdelivr.net/npm/postprocessing@6.33.3/+esm"
-              }
-            }
-          </script>
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.158/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.158/examples/jsm/",
+            "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm"
+        }
+    }
+    </script>
 
+    <!-- Previous vertex shader remains the same -->
+    <script type="x-shader/x-vertex" id="vertexShader">
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    </script>
 
-          <script id="vertexShader" type="x-shader/x-vertex">
-            varying vec2 vUv;
-          
-          void main() {
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-              vUv = uv;
-          }
-              </script>
+    <script type="x-shader/x-fragment" id="simulationShader">
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D uPreviousState;
+        uniform vec2 uResolution;
+        uniform vec2 uMouse;
+        uniform bool uIsMouseDown;
+        uniform float uTime;
+        uniform float uNoiseFactor;
+        uniform float uBirthRate;
+        uniform float uDeathRate;
+        uniform float uSustainRate;
+        uniform float uSpeed;
+        uniform float uSampleRadius;
+        uniform float uGrowthTarget;
+        uniform float uMouseMass;
+        uniform float uMouseRadius;
+        uniform float uGaussianWeight;
 
-              <!-- render shader -->
-          <script id="fragmentShaderScreen" type="x-shader/x-fragment">
-            precision highp float;
-            varying vec2 vUv;
-            uniform sampler2D uState;
-            uniform float uTime;
+        vec4 getNeighborhood(vec2 uv) {
+            vec2 texel = 1.0 / uResolution;
+            float alive = 0.0;
+            float total = 0.0;
             
-            // Return to original PBR parameters
-            const float roughness = 0.2;
-            const float metalness = 0.0;
-            const vec3 baseColor = vec3(0.8,0.00, 0.0);
+            // Sample in a radius around the current position
+            float radius = uSampleRadius;
+            float count = 0.0;
             
-            vec3 calculateNormal(vec2 uv) {
-                vec2 texel = vec2(1.0) / vec2(textureSize(uState, 0));
-                float left = texture2D(uState, uv - vec2(texel.x, 0.0)).b;
-                float right = texture2D(uState, uv + vec2(texel.x, 0.0)).b;
-                float top = texture2D(uState, uv - vec2(0.0, texel.y)).b;
-                float bottom = texture2D(uState, uv + vec2(0.0, texel.y)).b;
-                
-                vec3 normal = normalize(vec3(
-                    (right - left) * 2.0,
-                    (bottom - top) * 2.0,
-                    1.0
-                ));
-                
-                // Smooth normals based on height
-                float height = texture2D(uState, uv).b;
-                return mix(vec3(0.0, 0.0, 1.0), normal, smoothstep(0.1, 0.8, height));
-            }
-            
-            float ggxDistribution(float NdotH, float roughness) {
-                float alpha = roughness * roughness;
-                float alpha2 = alpha * alpha;
-                float NdotH2 = NdotH * NdotH;
-                float denom = NdotH2 * (alpha2 - 1.0) + 1.0;
-                return alpha2 / (3.14159 * denom * denom);
-            }
-            
-            float geometrySchlickGGX(float NdotV, float roughness) {
-                float r = roughness + 1.0;
-                float k = (r * r) / 8.0;
-                return NdotV / (NdotV * (1.0 - k) + k);
-            }
-            
-            vec3 fresnelSchlick(float cosTheta, vec3 F0) {
-                return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
-            }
-            
-            void main() {
-                vec4 state = texture2D(uState, vUv);
-                float mass = state.r;
-                float height = state.b;
-                
-                vec3 normal = calculateNormal(vUv);
-                vec3 lightPos = vec3(2.0 * cos(uTime * 0.5), 2.0 * sin(uTime * 0.5), 2.0);
-                vec3 viewPos = vec3(0.0, 0.0, 2.0);
-                vec3 worldPos = vec3(vUv * 2.0 - 1.0, height);
-                
-                vec3 N = normal;
-                vec3 V = normalize(viewPos - worldPos);
-                vec3 L = normalize(lightPos - worldPos);
-                vec3 H = normalize(V + L);
-                
-                float NdotV = max(dot(N, V), 0.0);
-                float NdotL = max(dot(N, L), 0.0);
-                float NdotH = max(dot(N, H), 0.0);
-                float HdotV = max(dot(H, V), 0.0);
-                
-                vec3 F0 = mix(vec3(0.04), baseColor, metalness);
-                vec3 F = fresnelSchlick(HdotV, F0);
-                float D = ggxDistribution(NdotH, roughness);
-                float G = geometrySchlickGGX(NdotV, roughness) * geometrySchlickGGX(NdotL, roughness);
-                
-                // Apply height-based specular dampening while keeping original material properties
-                vec3 specular = (D * F * G) / (4.0 * NdotV * NdotL + 0.001);
-                specular *= smoothstep(0.0, 0.3, height); // This line controls spotlight visibility
-                
-                vec3 kD = (vec3(1.0) - F) * (1.0 - metalness);
-                vec3 diffuse = kD * baseColor / 3.14159;
-                
-                vec3 color = (diffuse + specular) * NdotL;
-                
-                // Original emission and ambient values
-                color += baseColor * mass * 0.399;
-            
-                color += baseColor * 0.29;
-                
-                // Original tone mapping and gamma correction
-                color = color / (color + vec3(1.0));
-                color = pow(color, vec3(1.0/2.5));
-                
-                gl_FragColor = vec4(color, 1.0);
-            }
-              </script>
-          
-
-              <!-- simulation shader -->
-          <script id="fragmentShaderBuffer" type="x-shader/x-fragment">
-          
-            precision highp float;
-            varying vec2 vUv;
-            uniform sampler2D uPreviousState;
-            uniform vec2 uResolution;
-            uniform vec2 uMouse;
-            uniform bool uIsMouseDown;
-            uniform float uTime;
-    
-            // Continuous neighborhood counting
-            vec4 getNeighborhood(vec2 uv) {
-                vec2 texel = 1.0 / uResolution;
-                float alive = 0.0;
-                float total = 0.0;
-                
-                // Sample in a radius around the current position
-                float radius = 3.0;
-                float count = 0.0;
-                
-                for(float y = -radius; y <= radius; y++) {
-                    for(float x = -radius; x <= radius; x++) {
-                        vec2 offset = vec2(x, y) * texel;
-                        float dist = length(offset * uResolution / radius);
+            for(float y = -radius; y <= radius; y++) {
+                for(float x = -radius; x <= radius; x++) {
+                    vec2 offset = vec2(x, y) * texel;
+                    float dist = length(offset * uResolution / radius);
+                    
+                    // Only count cells within a circle
+                    if(dist <= radius) {
+                        // Gaussian weight based on distance
+                        float weight = exp(-dist * dist / uGaussianWeight);
                         
-                        // Only count cells within a circle
-                        if(dist <= radius) {
-                            // Gaussian weight based on distance
-                            float weight = exp(-dist * dist / 4.0);
-                            
-                            vec4 state = texture2D(uPreviousState, uv + offset);
-                            alive += state.r * weight;
-                            total += weight;
-                            count += 1.0;
-                        }
+                        vec4 state = texture2D(uPreviousState, uv + offset);
+                        alive += state.r * weight;
+                        total += weight;
+                        count += 1.0;
                     }
                 }
-                
-                // Normalize the count to 0-1 range
-                alive = alive / total;
-                
-                // Calculate how close we are to having "3 neighbors"
-                // Map the continuous value to peak at 3/8 (equivalent to 3 neighbors in discrete version)
-                float neighborFactor = 1.0 - abs(alive - 0.375) * 4.0;
-                
-                return vec4(alive, neighborFactor, count, total);
             }
-    
-            float hash(vec2 p) {
-                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+            
+            // Normalize the count to 0-1 range
+            alive = alive / total;
+            
+            // Calculate how close we are to having "3 neighbors"
+            // Map the continuous value to peak at 3/8 (equivalent to 3 neighbors in discrete version)
+            float neighborFactor = 1.0 - abs(alive - 0.375) * 4.0;
+            
+            return vec4(alive, neighborFactor, count, total);
+        }
+
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+
+        void main() {
+            vec4 prevState = texture2D(uPreviousState, vUv);
+            vec4 neighborhood = getNeighborhood(vUv);
+            
+            float currentMass = prevState.r;
+            float currentVelocity = prevState.g;
+            float currentHeight = prevState.b;
+            
+            // Calculate state change based on neighborhood
+            float neighborFactor = neighborhood.y;
+            float targetMass = 0.0;
+            
+            // Birth rule (continuous version of "exactly 3 neighbors")
+            if(neighborFactor > uBirthRate) {
+                targetMass = uGrowthTarget;
             }
-    
-            void main() {
-                vec4 prevState = texture2D(uPreviousState, vUv);
-                vec4 neighborhood = getNeighborhood(vUv);
-                
-                float currentMass = prevState.r;
-                float currentVelocity = prevState.g;
-                float currentHeight = prevState.b;
-                
-                // Continuous version of Conway's rules
-                float birthRate = 0.91;  // How quickly cells come alive
-                float deathRate = 0.91;  // How quickly cells die
-                float sustainRate = 0.9; // How well cells maintain their state
-                
-                // Calculate state change based on neighborhood
-                float neighborFactor = neighborhood.y;
-                float targetMass = 0.0;
-                
-                // Birth rule (continuous version of "exactly 3 neighbors")
-                if(neighborFactor > 0.99) {
-                    targetMass = 2.0;
-                }
-                // Death rule (continuous version of underpopulation/overpopulation)
-                else if(neighborFactor < 0.6) {
-                    targetMass = 0.0;
-                }
-                // Sustain current state with slight decay
-                else {
-                    targetMass = currentMass * sustainRate;
-                }
-                
-                // Add some noise and movement
-                float noise = hash(vUv + vec2(uTime * 0.01));
-                float noiseFactor = 0.;
-                
-                // Calculate new state
-                float newMass = mix(currentMass, targetMass, 0.15) + (noise - 0.5) * noiseFactor;
-                float newVelocity = currentVelocity * 0.95;
-                float newHeight = currentHeight * 0.98 + newMass * 0.1;
-                
-                // Mouse interaction
-                vec2 mouseDist = vUv - uMouse;
-                if( uIsMouseDown && length(mouseDist) < 0.03) {
-                    newMass = 0.50;
-                    newHeight += 0.3;
-                    newVelocity += length(mouseDist) * 2.0;
-                }
-                
-                // Ensure values stay in valid range
-                newMass = clamp(newMass, 0.0, 1.0);
-                newHeight = clamp(newHeight, 0.0, 1.0);
-                
-                gl_FragColor = vec4(newMass, newVelocity, newHeight, 1.0);
+            // Death rule (continuous version of underpopulation/overpopulation)
+            else if(neighborFactor < uDeathRate) {
+                targetMass = 0.0;
             }
-              </script>
-    <script type="module" src="index.js"></script>
+            // Sustain current state with slight decay
+            else {
+                targetMass = currentMass * uSustainRate;
+            }
+            
+            // Add some noise and movement
+            float noise = hash(vUv + vec2(uTime * 0.01));
+            
+            // Calculate new state
+            float newMass = mix(currentMass, targetMass, uSpeed) + (noise - 0.5) * uNoiseFactor;
+            float newVelocity = currentVelocity * 0.95;
+            float newHeight = currentHeight * 0.98 + newMass * 0.5;
+            
+            // Mouse interaction
+            vec2 mouseDist = vUv - uMouse;
+            // Adjust for aspect ratio
+            mouseDist.x *= uResolution.x / uResolution.y;
+
+            if(uIsMouseDown && length(mouseDist) < uMouseRadius) {
+                // Create a more organic, lumpy pattern
+                float distFactor = 1.0 - length(mouseDist) / uMouseRadius;
+                float angle = atan(mouseDist.y, mouseDist.x);
+                
+                // Add some variation based on angle and time
+                float variation = sin(angle * 8.0 + uTime * 2.0) * 0.3 + 
+                                 sin(angle * 4.0 - uTime * 3.0) * 0.2;
+                
+                // Modulate the mass and height based on the variation
+                newMass = uMouseMass + variation * distFactor * 0.3;
+                newHeight += (0.3 + variation * 0.2) * distFactor;
+                newVelocity += length(mouseDist) * (1.0 + variation) * 2.0;
+            }
+            
+            // Ensure values stay in valid range
+            newMass = clamp(newMass, 0.0, 1.0);
+            newHeight = clamp(newHeight, 0.0, 1.0);
+            
+            gl_FragColor = vec4(newMass, newVelocity, newHeight, 1.0);
+        }
+    </script>
+
+    <script type="x-shader/x-fragment" id="renderShader">
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D uState;
+        uniform float uTime;
+        uniform vec3 uBaseColor;
+        uniform vec4 uSecondaryColor;
+        uniform float uRoughness;
+        uniform float uMetalness;
+        uniform sampler2D uImageTexture;
+        uniform bool uGlassEffect;
+        uniform float uToneMappingDenominator;
+        uniform float uNormalMultiplier;
+        uniform float uHeightMultiplier;
+        uniform bool uShowImage;
+        
+        uniform bool uSmoothNormals;
+        uniform float uLightPosZ;
+        uniform vec3 uSpecularColor;
+        uniform bool uSpotlightDampening;
+        uniform float uNormalZComponent;
+        // Return to original PBR parameters
+        
+        vec3 calculateNormal(vec2 uv) {
+            vec2 texel = vec2(1.0) / vec2(textureSize(uState, 0));
+            float left = texture2D(uState, uv - vec2(texel.x, 0.0)).b;
+            float right = texture2D(uState, uv + vec2(texel.x, 0.0)).b;
+            float top = texture2D(uState, uv - vec2(0.0, texel.y)).b;
+            float bottom = texture2D(uState, uv + vec2(0.0, texel.y)).b;
+            
+            vec3 normal = normalize(vec3(
+                (right - left) * uNormalMultiplier,
+                (bottom - top) * uNormalMultiplier,
+                uNormalZComponent
+            ));
+            
+            // Smooth normals based on height
+            if(uSmoothNormals) {
+                float height = texture2D(uState, uv).b;
+                return mix(vec3(0.0, 0.0, 1.0), normal, smoothstep(0.1, 0.8, height * uHeightMultiplier));
+            }
+            return normal;
+        }
+        
+        float ggxDistribution(float NdotH, float roughness) {
+            float alpha = roughness * roughness;
+            float alpha2 = alpha * alpha;
+            float NdotH2 = NdotH * NdotH;
+            float denom = NdotH2 * (alpha2 - 1.0) + 1.0;
+            return alpha2 / (3.14159 * denom * denom);
+        }
+        
+        float geometrySchlickGGX(float NdotV, float roughness) {
+            float r = roughness + 1.0;
+            float k = (r * r) / 8.0;
+            return NdotV / (NdotV * (1.0 - k) + k);
+        }
+        
+        vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+            return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+        }
+        
+        void main() {
+            vec4 state = texture2D(uState, vUv);
+            float mass = state.r;
+            float height = state.b;
+            
+            vec3 normal = calculateNormal(vUv);
+            vec3 lightPos = vec3(2.0 * cos(uTime * 0.5), 2.0 * sin(uTime * 0.5), uLightPosZ);
+            vec3 viewPos = vec3(0.0, 0.0, 2.0);
+            vec3 worldPos = vec3(vUv * 2.0 - 1.0, height);
+            
+            vec3 N = normal;
+            vec3 V = normalize(viewPos - worldPos);
+            vec3 L = normalize(lightPos - worldPos);
+            vec3 H = normalize(V + L);
+            
+            float NdotV = max(dot(N, V), 0.0);
+            float NdotL = max(dot(N, L), 0.0);
+            float NdotH = max(dot(N, H), 0.0);
+            float HdotV = max(dot(H, V), 0.0);
+            
+            vec3 F0 = mix(uSpecularColor, uBaseColor, uMetalness);
+            vec3 F = fresnelSchlick(HdotV, F0);
+            float D = ggxDistribution(NdotH, uRoughness);
+            float G = geometrySchlickGGX(NdotV, uRoughness) * geometrySchlickGGX(NdotL, uRoughness);
+            
+            // Apply height-based specular dampening while keeping original material properties
+            vec3 specular = (D * F * G) / (4.0 * NdotV * NdotL + 0.001);
+            specular *= uSpotlightDampening ? smoothstep(0.0, 0.3, height) : 1.0; // This line controls spotlight visibility
+            
+            vec3 kD = (vec3(1.0) - F) * (1.0 - uMetalness);
+            vec3 diffuse = kD * uBaseColor / 3.14159;
+            
+            vec3 color = (diffuse + specular) * NdotL;
+            
+            if(uSecondaryColor.a > 0.0) {
+                color -= uBaseColor * mass * 0.25;
+                color += uSecondaryColor.rgb * uSecondaryColor.a * mass;
+            } else {
+                color += uBaseColor * mass * 0.99;
+            }
+
+            color += uBaseColor * 0.9;
+
+            if(uGlassEffect) {
+                // Sample the image texture with UV distortion based on height and mass
+                vec2 distortedUV = vUv + normal.xy * height * 0.1;
+                vec3 imageColor = texture2D(uImageTexture, distortedUV).rgb;
+                // Create a more dynamic blend factor
+                float blendFactor = smoothstep(0.0, 0.8, mass * 0.7 + height * 0.5);
+                // Blend colors with distortion
+                vec3 distortedColor = mix(
+                    imageColor,
+                    color,
+                    blendFactor
+                );
+
+                // Final color blend
+                if(uShowImage) {
+                    color = mix(
+                        distortedColor,
+                        color + imageColor * mass,
+                        blendFactor * 0.7
+                    );
+                }
+                
+                if (blendFactor > 0.1) {
+                    vec2 aberrationOffset = normal.xy * height * 2.;
+                    vec3 redChannel = texture2D(uImageTexture, distortedUV + aberrationOffset).rgb;
+                    vec3 blueChannel = texture2D(uImageTexture, distortedUV - aberrationOffset).rgb;
+                    color.r = mix(color.r, redChannel.r, blendFactor * 0.3);
+                    color.b = mix(color.b, blueChannel.b, blendFactor * 0.3);
+                }
+            }
+            
+            // Original tone mapping and gamma correction
+            color = color / (color + vec3(1.0));
+            color = pow(color, vec3(1.0/uToneMappingDenominator));
+            
+            gl_FragColor = vec4(color, 1.0);
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import GUI from 'lil-gui';
+
+        class SlimeSimulation {
+            constructor() {
+                 this.canvas = document.getElementById('canvas');
+                this.initRenderer();
+                this.initScene();
+                this.initSimulation();
+                this.addEventListeners();
+                this.animate();
+                this.lastMouseX = 0;
+                this.lastMouseY = 0;
+                this.mouseTimeout = null;
+                this.isTouch = false;
+
+                // Add touch-specific properties
+                this.touchActive = false;
+               
+                // Add texture loading
+                this.loadTextures().then(() => {
+                    this.initRenderer();
+                    this.initScene();
+                    this.initSimulation();
+                    this.addEventListeners();
+                    this.animate();
+                });
+
+                // Add after initialization is complete
+                this.initGUI();
+            }
+
+            async loadTextures() {
+                const textureLoader = new THREE.TextureLoader();
+                const loadTexture = (url) => {
+                    return new Promise((resolve, reject) => {
+                        textureLoader.load(url, resolve, undefined, reject);
+                    });
+                };
+
+                try {
+                    // Load your image - replace URL with your actual image path
+                    this.imageTexture = await loadTexture('/maple.png');
+                    this.imageTexture.wrapS = THREE.RepeatWrapping;
+                    this.imageTexture.wrapT = THREE.RepeatWrapping;
+                } catch (error) {
+                    console.error('Error loading texture:', error);
+                    // Fallback to a blank texture
+                    this.imageTexture = new THREE.Texture();
+                }
+            }
+
+            initRenderer() {
+                this.renderer = new THREE.WebGLRenderer({
+                    canvas: document.getElementById('canvas'),
+                    antialias: true
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+            }
+
+            initScene() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+                this.quad = new THREE.PlaneGeometry(2, 2);
+            }
+
+            initSimulation() {
+                const aspectRatio = window.innerWidth / window.innerHeight;
+                // Detect mobile and use lower resolution
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                console.log(isMobile);
+                const baseResolution = isMobile ? 128 : 512; // Even lower for mobile
+                const stretchFactor = 1.0; // Adjust this to control amount of stretch
+                
+                // Always make width wider by stretchFactor
+                const sizes = {
+                    width: Math.round(baseResolution * aspectRatio * stretchFactor),
+                    height: baseResolution
+                };
+                this.sizes = sizes;
+
+                // Create render targets for ping-pong
+                this.renderTargets = [
+                    new THREE.WebGLRenderTarget(sizes.width, sizes.height, {
+                        minFilter: THREE.LinearFilter,
+                        magFilter: THREE.LinearFilter,
+                        format: THREE.RGBAFormat,
+                        type: THREE.HalfFloatType
+                    }),
+                    new THREE.WebGLRenderTarget(sizes.width, sizes.height, {
+                        minFilter: THREE.LinearFilter,
+                        magFilter: THREE.LinearFilter,
+                        format: THREE.RGBAFormat,
+                        type: THREE.HalfFloatType
+                    })
+                ];
+
+                // Simulation material
+                this.simulationMaterial = new THREE.ShaderMaterial({
+                    vertexShader: document.getElementById('vertexShader').textContent,
+                    fragmentShader: document.getElementById('simulationShader').textContent,
+                    uniforms: {
+                        uPreviousState: { value: null },
+                        uResolution: { value: new THREE.Vector2(sizes.width, sizes.height) },
+                        uMouse: { value: new THREE.Vector2(0.5, 0.5) },
+                        uIsMouseDown: { value: false },
+                        uTime: { value: 0 },
+                        // New simulation uniforms
+                        uNoiseFactor: { value: 0.005 },
+                        uBirthRate: { value: 0.9 },
+                        uDeathRate: { value: 0.89 },
+                        uSustainRate: { value: 0.985 },
+                        uSpeed: { value: 0.1 },
+                        uSampleRadius: { value: 6.0 },
+                        uGrowthTarget: { value: 10.0 },
+                        uMouseMass: { value: 0.6 },
+                        uMouseRadius: { value: 0.05 },
+                        uGaussianWeight: { value: 8.0 }
+                    }
+                });
+
+                // Render material
+                this.renderMaterial = new THREE.ShaderMaterial({
+                    vertexShader: document.getElementById('vertexShader').textContent,
+                    fragmentShader: document.getElementById('renderShader').textContent,
+                    uniforms: {
+                        uState: { value: null },
+                        uTime: { value: 0 },
+                        uBaseColor: { value: new THREE.Vector3(0.0, 1.0, 0.0) },
+                        uSecondaryColor: { value: new THREE.Vector4(0.0, 0.01, 0.02, 1.0) },
+                        uRoughness: { value: 0.15 },
+                        uMetalness: { value: 0.9 },
+                        uImageTexture: { value: this.imageTexture },
+                        uShowImage: { value: true },
+                        uGlassEffect: { value: true },
+                        uToneMappingDenominator: { value: 2.2 },
+                        uSmoothNormals: { value: false },
+                        uLightPosZ: { value: 1.5 },
+                        uSpecularColor: { value: new THREE.Vector3(0.6, 0.6, 0.6) },
+                        uSpotlightDampening: { value: true },
+                        uHeightMultiplier: { value: 1.5 },
+                        uNormalMultiplier: { value: 4.0 },
+                        uNormalZComponent: { value: 0.8 }
+                    }
+                });
+
+                // Initialize with random state
+                const initialState = new Float32Array(sizes.width * sizes.height * 4);
+                for(let i = 0; i < initialState.length; i += 4) {
+                    initialState[i] = Math.random() * 0.1;   // mass
+                    initialState[i + 1] = 0;                 // velocity
+                    initialState[i + 2] = 0;                 // height
+                    initialState[i + 3] = 1;                 // alpha
+                }
+
+                this.renderer.setRenderTarget(this.renderTargets[0]);
+                const texture = new THREE.DataTexture(
+                    initialState, this.sizes.width, this.sizes.height, THREE.RGBAFormat, THREE.HalfFloatType
+                );
+                texture.needsUpdate = true;
+                
+                const mesh = new THREE.Mesh(this.quad, new THREE.MeshBasicMaterial({ map: texture }));
+                const tempScene = new THREE.Scene();
+                tempScene.add(mesh);
+                this.renderer.render(tempScene, this.camera);
+                this.renderer.setRenderTarget(null);
+            }
+
+            addEventListeners() {
+                window.addEventListener('resize', this.onResize.bind(this));
+                window.addEventListener('mousemove', this.onMouseMove.bind(this));
+                
+                // Add touch events to the canvas specifically
+                this.canvas.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+                this.canvas.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+                this.canvas.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
+                this.canvas.addEventListener('touchcancel', this.onTouchEnd.bind(this), { passive: false });
+
+                // Prevent default touch actions on the canvas
+                this.canvas.style.touchAction = 'none';
+                document.body.style.overscrollBehavior = 'none';
+            }
+
+            onResize() {
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            onTouchStart(event) {
+                event.preventDefault();
+                this.isTouch = true;
+                this.touchActive = true;
+                this.handleTouch(event.touches[0]);
+            }
+
+            onTouchMove(event) {
+                event.preventDefault();
+                if (this.touchActive && event.touches.length > 0) {
+                    this.handleTouch(event.touches[0]);
+                }
+            }
+
+            onTouchEnd(event) {
+                event.preventDefault();
+                this.touchActive = false;
+                this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+            }
+
+            handleTouch(touch) {
+                // Get canvas bounds for accurate position calculation
+                const rect = this.canvas.getBoundingClientRect();
+                
+                // Calculate position relative to canvas
+                const x = (touch.clientX - rect.left) / rect.width;
+                const y = 1 - ((touch.clientY - rect.top) / rect.height);
+
+                // Ensure coordinates are within bounds
+                const clampedX = Math.max(0, Math.min(1, x));
+                const clampedY = Math.max(0, Math.min(1, y));
+
+                this.simulationMaterial.uniforms.uMouse.value.x = clampedX;
+                this.simulationMaterial.uniforms.uMouse.value.y = clampedY;
+                this.simulationMaterial.uniforms.uIsMouseDown.value = true;
+
+                if (this.mouseTimeout) {
+                    clearTimeout(this.mouseTimeout);
+                }
+
+                this.mouseTimeout = setTimeout(() => {
+                    if (!this.touchActive) {
+                        this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+                    }
+                }, 20);
+            }
+
+            onMouseMove(event) {
+                if (!this.isTouch) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = (event.clientX - rect.left) / rect.width;
+                    const y = 1 - ((event.clientY - rect.top) / rect.height);
+
+                    this.simulationMaterial.uniforms.uMouse.value.x = Math.max(0, Math.min(1, x));
+                    this.simulationMaterial.uniforms.uMouse.value.y = Math.max(0, Math.min(1, y));
+                    this.simulationMaterial.uniforms.uIsMouseDown.value = true;
+
+                    if (this.mouseTimeout) {
+                        clearTimeout(this.mouseTimeout);
+                    }
+
+                    this.mouseTimeout = setTimeout(() => {
+                        this.simulationMaterial.uniforms.uIsMouseDown.value = false;
+                    }, 20);
+                }
+            }
+
+            animate() {
+                requestAnimationFrame(this.animate.bind(this));
+                
+                const time = performance.now() * 0.001;
+                this.simulationMaterial.uniforms.uTime.value = time;
+                this.renderMaterial.uniforms.uTime.value = time;
+
+                // Simulation step
+                this.simulationMaterial.uniforms.uPreviousState.value = this.renderTargets[0].texture;
+                this.renderer.setRenderTarget(this.renderTargets[1]);
+                this.renderer.render(new THREE.Scene().add(new THREE.Mesh(this.quad, this.simulationMaterial)), this.camera);
+
+                // Render step
+                this.renderMaterial.uniforms.uState.value = this.renderTargets[1].texture;
+                this.renderer.setRenderTarget(null);
+                this.renderer.render(new THREE.Scene().add(new THREE.Mesh(this.quad, this.renderMaterial)), this.camera);
+
+                // Swap buffers
+                [this.renderTargets[0], this.renderTargets[1]] = [this.renderTargets[1], this.renderTargets[0]];
+            }
+
+            initGUI() {
+                const gui = new GUI();
+                
+                // Create an object to hold our boolean values
+                const params = {
+                    glassEffect: true,  // Initial value
+                    smoothNormals: false,
+                    spotlightDampening: true,
+                    showImage: true
+                };
+
+                // Simulation parameters
+                const simFolder = gui.addFolder('Simulation');
+                simFolder.add(this.simulationMaterial.uniforms.uNoiseFactor, 'value', 0.00, 1.0)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uNoiseFactor.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Noise Factor');
+                simFolder.add(this.simulationMaterial.uniforms.uBirthRate, 'value', 0.0, 1.0)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uBirthRate.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Birth Rate');
+                simFolder.add(this.simulationMaterial.uniforms.uDeathRate, 'value', 0.0, 1.0)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uDeathRate.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Death Rate');
+                simFolder.add(this.simulationMaterial.uniforms.uSustainRate, 'value', 0.0, 1.0)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uSustainRate.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Sustain Rate');
+                simFolder.add(this.simulationMaterial.uniforms.uSpeed, 'value', 0.0, 1.0)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uSpeed.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Speed');
+                simFolder.add(this.simulationMaterial.uniforms.uSampleRadius, 'value', 0, 15)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uSampleRadius.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Sample Radius');
+                simFolder.add(this.simulationMaterial.uniforms.uGrowthTarget, 'value', 0.0, 100.0)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uGrowthTarget.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Growth Target');
+                simFolder.add(this.simulationMaterial.uniforms.uMouseMass, 'value', 0.2, 1.0)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uMouseMass.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Mouse Mass');
+                simFolder.add(this.simulationMaterial.uniforms.uMouseRadius, 'value', 0.01, 0.2)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uMouseRadius.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Mouse Radius');
+                simFolder.add(this.simulationMaterial.uniforms.uGaussianWeight, 'value', 4, 20)
+                    .onChange((value) => {
+                        this.simulationMaterial.uniforms.uGaussianWeight.value = value;
+                        this.simulationMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Gaussian Weight');
+
+                // Render parameters
+                const renderFolder = gui.addFolder('Render');
+                renderFolder.add(this.renderMaterial.uniforms.uRoughness, 'value', 0.05, 0.95)
+                    .onChange((value) => {
+                        this.renderMaterial.uniforms.uRoughness.value = value;
+                        this.renderMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Roughness');
+                renderFolder.add(this.renderMaterial.uniforms.uMetalness, 'value', 0, 1)
+                    .onChange((value) => {
+                        this.renderMaterial.uniforms.uMetalness.value = value;
+                        this.renderMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Metalness');
+                renderFolder.add(this.renderMaterial.uniforms.uToneMappingDenominator, 'value', 1.8, 2.4)
+                    .onChange((value) => {
+                        this.renderMaterial.uniforms.uToneMappingDenominator.value = value;
+                        this.renderMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Tone Mapping');
+                renderFolder.add(this.renderMaterial.uniforms.uLightPosZ, 'value', 1, 3)
+                    .onChange((value) => {
+                        this.renderMaterial.uniforms.uLightPosZ.value = value;
+                        this.renderMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Light Height');
+                renderFolder.add(this.renderMaterial.uniforms.uHeightMultiplier, 'value', 0.5, 3)
+                    .onChange((value) => {
+                        this.renderMaterial.uniforms.uHeightMultiplier.value = value;
+                        this.renderMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Height Multiplier');
+                renderFolder.add(this.renderMaterial.uniforms.uNormalMultiplier, 'value', 1, 8)
+                    .onChange((value) => {
+                        this.renderMaterial.uniforms.uNormalMultiplier.value = value;
+                        this.renderMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Normal Multiplier');
+                renderFolder.add(this.renderMaterial.uniforms.uNormalZComponent, 'value', 0.2, 1.5)
+                    .onChange((value) => {
+                        this.renderMaterial.uniforms.uNormalZComponent.value = value;
+                        this.renderMaterial.uniformsNeedUpdate = true;
+                    })
+                    .name('Normal Z Strength');
+
+                     // Boolean controls with onChange handlers
+                renderFolder.add(params, 'glassEffect')
+                    .onChange(value => {
+                        this.renderMaterial.uniforms.uGlassEffect.value = value;
+                    })
+                    .name('Glass Effect');
+
+                renderFolder.add(params, 'showImage')
+                    .onChange(value => {
+                        this.renderMaterial.uniforms.uShowImage.value = value;
+                    })
+                    .name('Show Image');
+                    
+                renderFolder.add(params, 'smoothNormals')
+                    .onChange(value => {
+                        this.renderMaterial.uniforms.uSmoothNormals.value = value;
+                    })
+                    .name('Smooth Normals');
+                    
+                renderFolder.add(params, 'spotlightDampening')
+                    .onChange(value => {
+                        this.renderMaterial.uniforms.uSpotlightDampening.value = value;
+                    })
+                    .name('Spotlight Dampening');
+                
+
+                // Optional: Add presets
+                const presets = {
+                    'Default': () => {
+                        // Set default values
+                        this.simulationMaterial.uniforms.uNoiseFactor.value = 0.005;
+                        this.simulationMaterial.uniforms.uBirthRate.value = 0.9;
+                        // ... etc
+                        // Update GUI
+                        gui.controllersRecursive().forEach(controller => controller.updateDisplay());
+                    },
+                    'Smooth': () => {
+                        this.simulationMaterial.uniforms.uNoiseFactor.value = 0.002;
+                        this.simulationMaterial.uniforms.uSpeed.value = 0.05;
+                        // ... etc
+                        gui.controllersRecursive().forEach(controller => controller.updateDisplay());
+                    }
+                };
+                
+                const presetsFolder = gui.addFolder('Presets');
+                presetsFolder.add(presets, 'Default');
+                presetsFolder.add(presets, 'Smooth');
+
+                // Add color pickers
+                const baseColorObj = { 
+                    color: [
+                        this.renderMaterial.uniforms.uBaseColor.value.x * 255,
+                        this.renderMaterial.uniforms.uBaseColor.value.y * 255,
+                        this.renderMaterial.uniforms.uBaseColor.value.z * 255
+                    ]
+                };
+
+                console.log(baseColorObj);
+                renderFolder.addColor(baseColorObj, 'color')
+                    .onChange(value => {
+                        console.log(value);
+                        this.renderMaterial.uniforms.uBaseColor.value.set(
+                           ...value
+                        );
+                    })
+                    .name('Base Color');
+
+                const secondaryColorObj = {
+                    color: [
+                        this.renderMaterial.uniforms.uSecondaryColor.value.x * 255,
+                        this.renderMaterial.uniforms.uSecondaryColor.value.y * 255,
+                        this.renderMaterial.uniforms.uSecondaryColor.value.z * 255,
+                        this.renderMaterial.uniforms.uSecondaryColor.value.w
+                    ]
+                };
+                renderFolder.addColor(secondaryColorObj, 'color')
+                    .onChange(value => {
+                        this.renderMaterial.uniforms.uSecondaryColor.value.set(
+                            ...value
+                        );
+                    })
+                    .name('Secondary Color');
+
+                // Add alpha control for secondary color
+                renderFolder.add(this.renderMaterial.uniforms.uSecondaryColor.value, 'w', 0, 1).onChange(value => {
+                    this.renderMaterial.uniforms.uSecondaryColor.value.w = value;
+                })
+                    .name('Secondary Alpha');
+
+                const specularColorObj = {
+                    color: [
+                        this.renderMaterial.uniforms.uSpecularColor.value.x * 255,
+                        this.renderMaterial.uniforms.uSpecularColor.value.y * 255,
+                        this.renderMaterial.uniforms.uSpecularColor.value.z * 255
+                    ]
+                };
+                renderFolder.addColor(specularColorObj, 'color')
+                    .onChange(value => {
+                        this.renderMaterial.uniforms.uSpecularColor.value.set(
+                            ...value
+                        );
+                    })
+                    .name('Specular Color');
+            }
+        }
+
+        new SlimeSimulation();
+    </script>
 </body>
 </html>

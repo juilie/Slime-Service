@@ -1,0 +1,62 @@
+uIsMouseDown more like is mouse moving
+(tar) line 27 weight is 8.0 for zoomed affect (very subtle...)
+(tar) lin 50/52 makes zoomeduv but doesnt use it...
+line 82 could make noise speed uniform
+line 86 3rd mix param is uspeed or rate of decay probably
+possibly remove velocity - it doesn't get used
+
+        uniform float uNoiseFactor;
+        uniform float uBirthRate;
+        uniform float uDeathRate;
+        uniform float uSustainRate;
+        uniform float uSpeed;
+
+
+        (tar) line 16/18 radius is 6 instead of 3 "for more spread". def make configurable - value of 1 is cool
+
+        make birthRate deathRate and sustainRate uniforms
+        make targetmass from birth uniform
+            
+  
+
+        birthrule - uNeighborThreshold or ubirthrate
+        deathrule - uneighbordeathrate
+
+            original rules
+            float birthRate = 0.91;  // How quickly cells come alive
+            float deathRate = 0.6;  // How quickly cells die
+            float sustainRate = 0.9; // How well cells maintain their state
+            target mass 2
+            
+            glass rules
+                deathRate 0.6
+                sustainRate 0.9
+                targetmass 2
+                mouse mass 0.5
+                mouse radius .03
+
+
+          modern rules
+            float birthRate = 0.9;  // How quickly cells come alive
+            float deathRate = 0.89;  // How quickly cells die
+            float sustainRate = 0.98; // How well cells maintain their state
+            target mass 100
+            speed 2
+            mouse radius .04
+            newmass from mouse 0.45
+
+            TAR
+            float birthRate = 0.99;
+            float deathRate = 0.1;
+            float sustainRate = 0.985;
+            birth target mass = 10
+
+        line 83 use uNoiseFactor
+
+        (original) line 93 newly added aspect ratio adjustment for mouse
+
+        (original) line 94 make mouseradius a uniform - tar uses 0.05
+        (original) uses new variation stuff it's awesome
+
+
+glass and other are same

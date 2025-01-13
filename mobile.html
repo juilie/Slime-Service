@@ -335,13 +335,13 @@ void main() {
                         minFilter: THREE.LinearFilter,
                         magFilter: THREE.LinearFilter,
                         format: THREE.RGBAFormat,
-                        type: THREE.FloatType
+                        type: THREE.HalfFloatType
                     }),
                     new THREE.WebGLRenderTarget(sizes.width, sizes.height, {
                         minFilter: THREE.LinearFilter,
                         magFilter: THREE.LinearFilter,
                         format: THREE.RGBAFormat,
-                        type: THREE.FloatType
+                        type: THREE.HalfFloatType
                     })
                 ];
 
@@ -379,7 +379,7 @@ void main() {
 
                 this.renderer.setRenderTarget(this.renderTargets[0]);
                 const texture = new THREE.DataTexture(
-                    initialState, this.sizes.width, this.sizes.height, THREE.RGBAFormat, THREE.FloatType
+                    initialState, this.sizes.width, this.sizes.height, THREE.RGBAFormat, THREE.HalfFloatType
                 );
                 texture.needsUpdate = true;
                 

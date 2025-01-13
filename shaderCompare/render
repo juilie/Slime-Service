@@ -1,0 +1,43 @@
+                (tar) line 18 - normal multiplier increased to 4.0, "z" component decreased to 0.8 for "more pronounced effect". maybe make configurable? not much difference i don't think
+
+                (tar) line 55 height is multiplied by 1.5, maybe make it configurable? seems like it's not a big deal - maybe even cancels out the light pos multiplier or normal multiplier
+
+(tar) line 76 changes color based on mass. maybe make it configurable? complex but cool potential rainbow effect. not necessary. probably just was a hardcoded value for teal
+
+(dissolve) line 95-113 big divergence. uses dissolve and wetness effects. possibly not worth keeping, but could be behind an if statement
+
+
+
+roughness metalness and basecolor are set in original
+
+            uniform vec3 uBaseColor;
+            uniform vec4 uSecondaryColor;
+            uniform float uRoughness;
+            uniform float uMetalness;
+            uniform sampler2D uImageTexture;
+
+            (original)(glass)(dissolve) line 25+26  maybe make toggleable? seems to make it more water like and less like clay. softens white. perhaps the mix can toggle
+
+        (tar) line 51 light pos last param is 1.5, maybe make it configurable? seems like z axis so it makes it closer or bigger?
+
+
+            (modern) line 53 light post is same, maybe make it configurable?
+
+            line 67 F0 mix value should be configurable - it's set to 0.04 in original. it affects the specular highlight
+
+            (original) line 74 dampens the lighting when smooth.
+
+
+            (tar) line 79 base color multiplier is 0.85, what i believe to be a brightness multiplier
+
+    (glass)(dissolve) big divergence.. or maybe not. conditional for secondary color to subtract or affect.  probably unnecessary
+            (glass) bigger divergence. image texture is used for color. make blendfactor configurable. conditional for mixing in image texture.
+    (glass) chromatic aberration effect...also make toggleable and configurable. perhaps differen than blendfactor.
+
+            line 82 should be used for secondary color. i think i was confused about line 81/82 and that caused unexpected result. maybe it's desirable but i was subtracting out the base color and replacing it with secondary basically
+
+            line 83 for base color - perhaps get rid of multiplier as it is basically just brighness
+
+            (tar)(glass) line 87 tone mapping pow denominator is 2.2, maybe make it configurable? it makes it darker with more specular highlights. tone mapping in general could be configurable
+
+that's it! next!

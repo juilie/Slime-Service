@@ -1,0 +1,9 @@
+{
+    "baseColor": [0.0, 0.0, 0.0],
+    "secondaryColor": [0.0, 0.0, 0.0, 0.0],
+    "roughness": 0.15,
+    "metalness": 0.9,
+    "neighborThreshold": 0.9,
+    "noiseFactor": 0.005,
+    "speed": 0.1
+  }
