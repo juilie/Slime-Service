@@ -330,9 +330,10 @@
         class SlimeSimulation {
             constructor() {
                 this.canvas = document.getElementById('canvas');
-                this.baseResolution = 128; // Default resolution for desktop
+                this.baseResolution = 128;
+                this.stretchFactor = 1.0;
                 if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-                    this.baseResolution = 128; // Lower resolution for mobile
+                    this.baseResolution = 128;
                 }
 
                 this.initRenderer();
@@ -398,16 +399,11 @@
 
             initSimulation() {
                 const aspectRatio = window.innerWidth / window.innerHeight;
-                // Detect mobile and use lower resolution
-                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                console.log(isMobile);
-                const baseResolution = isMobile ? 128 : 512; // Even lower for mobile
-                const stretchFactor = 1.0; // Adjust this to control amount of stretch
                 
-                // Always make width wider by stretchFactor
+                // Calculate sizes based on baseResolution and stretchFactor
                 const sizes = {
-                    width: Math.round(baseResolution * aspectRatio * stretchFactor),
-                    height: baseResolution
+                    width: Math.round(this.baseResolution * aspectRatio * this.stretchFactor),
+                    height: this.baseResolution
                 };
                 this.sizes = sizes;
 
@@ -443,7 +439,7 @@
                         uDeathRate: { value: 0.89 },
                         uSustainRate: { value: 0.985 },
                         uSpeed: { value: 0.1 },
-                        uSampleRadius: { value: 6.0 },
+                        uSampleRadius: { value: 4.0 },
                         uGrowthTarget: { value: 10.0 },
                         uMouseMass: { value: 0.6 },
                         uMouseRadius: { value: 0.05 },
@@ -607,11 +603,10 @@
 
             resizeSimulation(newBaseResolution) {
                 const aspectRatio = window.innerWidth / window.innerHeight;
-                const stretchFactor = 1.0;
                 
-                // Calculate new sizes
+                // Calculate new sizes using stretchFactor
                 const newSizes = {
-                    width: Math.round(newBaseResolution * aspectRatio * stretchFactor),
+                    width: Math.round(newBaseResolution * aspectRatio * this.stretchFactor),
                     height: newBaseResolution
                 };
 
@@ -666,14 +661,22 @@
                 const gui = new GUI();
                 
                 const simParams = {
-                    resolution: this.baseResolution
+                    resolution: this.baseResolution,
+                    stretchFactor: this.stretchFactor
                 };
 
-                gui.add(simParams, 'resolution', 64, 1024, 1)
+                gui.add(simParams, 'resolution', 4, 1024)
                     .name('Resolution')
                     .onChange(value => {
                         this.resizeSimulation(value);
                     });
+
+                // gui.add(simParams, 'stretchFactor', 0.01, 20.0, 0.1)
+                //     .name('Stretch Factor')
+                //     .onChange(value => {
+                //         this.stretchFactor = value;
+                //         this.resizeSimulation(this.baseResolution);
+                //     });
 
                 // Create an object to hold our boolean values
                 const params = {
