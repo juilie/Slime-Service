@@ -1,6 +1,10 @@
-# 3D Continuous Slime-like Inkspot Simulation
+# Slime Simulation Service
 
-An interactive WebGL simulation that creates a fluid, organic animation resembling a mix between Conway's Game of Life and a metallic liquid. The simulation responds to mouse/touch input and can be extensively customized through a GUI interface.
+![slime](https://github.com/user-attachments/assets/443565d5-e0fa-45f3-b3f4-2b22f83392d6)
+
+
+
+<p style="text-align: center">A WebGL slime simulation</p>
 
 ## Overview
 
