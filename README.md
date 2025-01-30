@@ -4,7 +4,7 @@
 
 
 
-An interactive WebGL simulation that creates a fluid, organic animation resembling a mix between Conway's Game of Life and a metallic liquid. The simulation responds to mouse/touch input and can be extensively customized through a GUI interface.
+<center>A WebGl Slime you can use on your website</center>
 
 ## Overview
 
