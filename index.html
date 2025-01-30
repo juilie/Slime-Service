@@ -276,10 +276,10 @@
             vec3 color = (diffuse + specular) * NdotL;
             
             if(uSecondaryColor.a > 0.0) {
-                color -= uBaseColor * mass * 0.25;
+                color -= uBaseColor * mass * 0.399;
                 color += uSecondaryColor.rgb * uSecondaryColor.a * mass;
             } else {
-                color += uBaseColor * mass * 0.99;
+                color += uBaseColor * mass * 0.399;
             }
 
             color += uBaseColor * 0.9;
@@ -828,12 +828,101 @@
                         this.simulationMaterial.uniforms.uSpeed.value = 0.05;
                         // ... etc
                         gui.controllersRecursive().forEach(controller => controller.updateDisplay());
+                    },
+                    'Tar': () => {},
+                    'Modern': () => {},
+                    'Glass': () => {},
+                    'Goo': () => {
+                        this.renderMaterial.uniforms.uBaseColor.value.set(0.3, 0.3, 0.2);
+                        this.renderMaterial.uniforms.uSecondaryColor.value.set(0.0, 0.0, 0.5, 1.0);
+                        this.renderMaterial.uniforms.uRoughness.value = 0.5;
+                        this.renderMaterial.uniforms.uMetalness.value = 0.0;
+                        this.renderMaterial.uniforms.uNoiseFactor.value = 0.0;
+                        this.renderMaterial.uniforms.uSpeed.value = 0.15;
+                        this.renderMaterial.uniforms.uSmoothNormals.value = true;
+                        this.renderMaterial.uniforms.uHeightMultiplier.value = 1.0;
+                        this.renderMaterial.uniforms.uSampleRadius.value = 3.0;
+                        this.renderMaterial.uniforms.uDeathRate.value = 0.6;
+                        this.renderMaterial.uniforms.uSustainRate.value = 0.9;
+                        this.renderMaterial.uniforms.uBirthRate.value = 0.99;
+                        gui.controllersRecursive().forEach(controller => controller.updateDisplay());
+                    },
+                    'Reference': () => {
+                        // Simulation parameters
+                        this.simulationMaterial.uniforms.uNoiseFactor.value = 0.0;
+                        this.simulationMaterial.uniforms.uBirthRate.value = 0.91;
+                        this.simulationMaterial.uniforms.uDeathRate.value = 0.6;
+                        this.simulationMaterial.uniforms.uSustainRate.value = 0.9;
+                        this.simulationMaterial.uniforms.uSpeed.value = 0.15;
+                        this.simulationMaterial.uniforms.uSampleRadius.value = 3.0;
+                        this.simulationMaterial.uniforms.uMouseMass.value = 0.5;
+                        this.simulationMaterial.uniforms.uMouseRadius.value = 0.03;
+                        this.simulationMaterial.uniforms.uGaussianWeight.value = 4.0;
+                        
+                        // Render parameters
+                        this.renderMaterial.uniforms.uBaseColor.value.set(0.1, 0.01, 0.8);
+                        this.renderMaterial.uniforms.uSecondaryColor.value.set(0.0, 0.0, 0.0, 0.0);
+                        this.renderMaterial.uniforms.uRoughness.value = 0.2;
+                        this.renderMaterial.uniforms.uMetalness.value = 0.0;
+                        this.renderMaterial.uniforms.uToneMappingDenominator.value = 2.5;
+                        this.renderMaterial.uniforms.uHeightMultiplier.value = 1.0;
+                        this.renderMaterial.uniforms.uNormalMultiplier.value = 2.0;
+                        this.renderMaterial.uniforms.uNormalZComponent.value = 1.0;
+                        this.renderMaterial.uniforms.uSmoothNormals.value = true;
+                        this.renderMaterial.uniforms.uSpotlightDampening.value = true;
+                        this.baseResolution = 512;
+                        
+                        // Update GUI
+                        gui.controllersRecursive().forEach(controller => controller.updateDisplay());
+                    },
+                    'Purple': () => {
+                        // Simulation parameters
+                        this.simulationMaterial.uniforms.uNoiseFactor.value = 0.0;
+                        this.simulationMaterial.uniforms.uBirthRate.value = 0.99;
+                        this.simulationMaterial.uniforms.uDeathRate.value = 0.6;
+                        this.simulationMaterial.uniforms.uSustainRate.value = 0.9;
+                        this.simulationMaterial.uniforms.uSpeed.value = 0.15;
+                        this.simulationMaterial.uniforms.uSampleRadius.value = 3.0;
+                        this.simulationMaterial.uniforms.uGrowthTarget.value = 2.0;
+                        this.simulationMaterial.uniforms.uMouseMass.value = 0.6;
+                        this.simulationMaterial.uniforms.uMouseRadius.value = 0.05;
+                        this.simulationMaterial.uniforms.uGaussianWeight.value = 4.0;
+                        
+                        // Render parameters
+                        this.renderMaterial.uniforms.uBaseColor.value.set(0.133, 0, 0.706);  // #2200b4
+                        this.renderMaterial.uniforms.uSecondaryColor.value.set(0.547, 0.106, 0.149, 0);  // #8c1b26 with alpha 0
+                        this.renderMaterial.uniforms.uSpecularColor.value.set(0.725, 0.725, 0.725);  // #b9b2b6
+                        this.renderMaterial.uniforms.uRoughness.value = 0.2;
+                        this.renderMaterial.uniforms.uMetalness.value = 0.0;
+                        this.renderMaterial.uniforms.uToneMappingDenominator.value = 2.4;
+                        this.renderMaterial.uniforms.uLightPosZ.value = 2.0;
+                        this.renderMaterial.uniforms.uHeightMultiplier.value = 1.0;
+                        this.renderMaterial.uniforms.uNormalMultiplier.value = 2.0;
+                        this.renderMaterial.uniforms.uNormalZComponent.value = 1.0;
+                        
+                        // Boolean parameters
+                        this.renderMaterial.uniforms.uGlassEffect.value = false;
+                        this.renderMaterial.uniforms.uShowImage.value = true;
+                        this.renderMaterial.uniforms.uSmoothNormals.value = true;
+                        this.renderMaterial.uniforms.uSpotlightDampening.value = true;
+                        
+                        // Resolution
+                        this.resizeSimulation(512);
+                        
+                        // Update GUI
+                        gui.controllersRecursive().forEach(controller => controller.updateDisplay());
                     }
                 };
                 
                 const presetsFolder = gui.addFolder('Presets');
                 presetsFolder.add(presets, 'Default');
                 presetsFolder.add(presets, 'Smooth');
+                presetsFolder.add(presets, 'Tar');
+                presetsFolder.add(presets, 'Modern');
+                presetsFolder.add(presets, 'Glass');
+                presetsFolder.add(presets, 'Goo');
+                presetsFolder.add(presets, 'Reference');
+                presetsFolder.add(presets, 'Purple');
 
                 // Add color pickers
                 const baseColorObj = { 
@@ -890,6 +979,41 @@
                         );
                     })
                     .name('Specular Color');
+
+                // Add clear function to simulation folder
+                simFolder.add({
+                    clear: () => {
+                        // Create empty state
+                        const emptyState = new Float32Array(this.sizes.width * this.sizes.height * 4);
+                        for(let i = 0; i < emptyState.length; i += 4) {
+                            emptyState[i] = 0;      // mass
+                            emptyState[i + 1] = 0;  // velocity
+                            emptyState[i + 2] = 0;  // height
+                            emptyState[i + 3] = 1;  // alpha
+                        }
+
+                        // Create temporary texture with empty state
+                        const texture = new THREE.DataTexture(
+                            emptyState, 
+                            this.sizes.width, 
+                            this.sizes.height, 
+                            THREE.RGBAFormat, 
+                            THREE.HalfFloatType
+                        );
+                        texture.needsUpdate = true;
+
+                        // Render empty state to both render targets
+                        const tempScene = new THREE.Scene();
+                        const tempMesh = new THREE.Mesh(this.quad, new THREE.MeshBasicMaterial({ map: texture }));
+                        tempScene.add(tempMesh);
+
+                        this.renderer.setRenderTarget(this.renderTargets[0]);
+                        this.renderer.render(tempScene, this.camera);
+                        this.renderer.setRenderTarget(this.renderTargets[1]);
+                        this.renderer.render(tempScene, this.camera);
+                        this.renderer.setRenderTarget(null);
+                    }
+                }, 'clear').name('Clear Simulation');
             }
         }
 

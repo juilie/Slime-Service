@@ -1,6 +1,0 @@
-new uniforms
-
- uniform float uNoiseFactor;
-uniform float uNeighborThreshold;
-uniform float uSpeed;
-uniform float uSampleRadius;

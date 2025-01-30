@@ -6,14 +6,9 @@
         uniform bool uIsMouseDown;
         uniform float uTime;
         uniform float uNoiseFactor;
-        uniform float uBirthRate;
-        uniform float uDeathRate;
-        uniform float uSustainRate;
+        uniform float uNeighborThreshold;
         uniform float uSpeed;
-        uniform float uSampleRadius;
-        uniform float uGrowthTarget;
-        uniform float uMouseMass;
-        uniform float uMouseRadius;
+
         // Continuous neighborhood counting
         vec4 getNeighborhood(vec2 uv) {
             vec2 texel = 1.0 / uResolution;
@@ -21,7 +16,7 @@
             float total = 0.0;
             
             // Sample in a radius around the current position
-            float radius = uSampleRadius;
+            float radius = 3.0;
             float count = 0.0;
             
             for(float y = -radius; y <= radius; y++) {
@@ -64,49 +59,43 @@
             float currentVelocity = prevState.g;
             float currentHeight = prevState.b;
             
+            // Continuous version of Conway's rules
+            float birthRate = 0.91;  // How quickly cells come alive
+            float deathRate = 0.91;  // How quickly cells die
+            float sustainRate = 0.9; // How well cells maintain their state
+            
             // Calculate state change based on neighborhood
             float neighborFactor = neighborhood.y;
             float targetMass = 0.0;
             
             // Birth rule (continuous version of "exactly 3 neighbors")
-            if(neighborFactor > uBirthRate) {
-                targetMass = uGrowthTarget;
+            if(neighborFactor > uNeighborThreshold) {
+                targetMass = 2.0;
             }
             // Death rule (continuous version of underpopulation/overpopulation)
-            else if(neighborFactor < uDeathRate) {
+            else if(neighborFactor < 0.6) {
                 targetMass = 0.0;
             }
             // Sustain current state with slight decay
             else {
-                targetMass = currentMass * uSustainRate;
+                targetMass = currentMass * sustainRate;
             }
             
             // Add some noise and movement
             float noise = hash(vUv + vec2(uTime * 0.01));
+            float noiseFactor = uNoiseFactor;
             
             // Calculate new state
-            float newMass = mix(currentMass, targetMass, uSpeed) + (noise - 0.5) * uNoiseFactor;
+            float newMass = mix(currentMass, targetMass, uSpeed) + (noise - 0.5) * noiseFactor;
             float newVelocity = currentVelocity * 0.95;
             float newHeight = currentHeight * 0.98 + newMass * 0.1;
             
             // Mouse interaction
             vec2 mouseDist = vUv - uMouse;
-            // Adjust for aspect ratio
-            mouseDist.x *= uResolution.x / uResolution.y;
-
-            if(uIsMouseDown && length(mouseDist) < uMouseRadius) {
-                // Create a more organic, lumpy pattern
-                float distFactor = 1.0 - length(mouseDist) / uMouseRadius;
-                float angle = atan(mouseDist.y, mouseDist.x);
-                
-                // Add some variation based on angle and time
-                float variation = sin(angle * 8.0 + uTime * 2.0) * 0.3 + 
-                                 sin(angle * 4.0 - uTime * 3.0) * 0.2;
-                
-                // Modulate the mass and height based on the variation
-                newMass = uMouseMass + variation * distFactor * 0.3;
-                newHeight += (0.3 + variation * 0.2) * distFactor;
-                newVelocity += length(mouseDist) * (1.0 + variation) * 2.0;
+            if( uIsMouseDown && length(mouseDist) < 0.03) {
+                newMass = 0.50;
+                newHeight += 0.3;
+                newVelocity += length(mouseDist) * 2.0;
             }
             
             // Ensure values stay in valid range
