@@ -4,7 +4,7 @@
 
 
 
-<center>A WebGl Slime you can use on your website</center>
+<p style="text-align: center">A WebGL slime simulation</p>
 
 ## Overview
 
